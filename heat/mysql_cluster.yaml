@@ -1,0 +1,59 @@
+heat_template_version: 2017-02-24
+
+description: Heat orchestration template for deploying a MySQL Server
+
+parameters:
+
+  node_count:
+    type: number
+
+  image:
+    type: string
+
+  flavor:
+    type: string
+
+  key_name:
+    type: string
+
+  network:
+    type: string
+
+  security_group:
+    type: string
+
+  mysql_volume_size:
+    type: string
+
+  name:
+    type: string
+
+resources:
+
+  mysql_group:
+    type: OS::Nova::ServerGroup
+    properties:
+      policies: ['anti-affinity']
+
+  mysql_nodes:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: node_count }
+      resource_def:
+        type: OW::MySQL::Node
+        properties:
+          name: { list_join: ['-', [ { get_param: 'name'}, '%index%'] ] }
+          image: { get_param: image }
+          flavor: { get_param: flavor }
+          key_name: { get_param: key_name }
+          network: { get_param: network }
+          security_group: { get_param: security_group }
+          mysql_volume_size: { get_param: mysql_volume_size }
+          server_group: { get_resource: mysql_group }
+          index: "%index%"
+
+# Outputs not as important here - we're generating inventory via Ansible.
+outputs:
+  server_ips:
+    description: "The IP addresses of the provisioned nodes"
+    value: { get_attr: [mysql_nodes, server_ip] }

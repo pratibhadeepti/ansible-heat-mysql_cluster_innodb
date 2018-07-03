@@ -1,0 +1,17 @@
+---
+- name: Get Facts
+  os_server_facts:
+    server: "{{ stack_name }}*"
+
+- name: display server name
+  debug:
+    msg: "hostname: {{ item.name }} | IP: {{ item.private_v4 }}" 
+  with_items: "{{ openstack_servers|json_query('[*]') }}"
+
+- name: Generate dynamic inventory
+  add_host: 
+    hostname: "{{ item.name }}"
+    groups: mysql
+    ansible_host: "{{ item.private_v4 }}"
+    ansible_user: "{{ ssh_user }}"
+  with_items: "{{ openstack_servers|json_query('[*]') }}"

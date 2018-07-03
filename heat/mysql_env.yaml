@@ -1,0 +1,3 @@
+resource_registry:
+  OW::MySQL::Cluster: mysql_cluster.yaml
+  OW::MySQL::Node: mysql_node.yaml

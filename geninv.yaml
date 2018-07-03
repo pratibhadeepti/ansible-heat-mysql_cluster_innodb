@@ -1,0 +1,6 @@
+---
+- name: "Generating dynamic inventory"
+  hosts: stack
+  connection: local
+  roles:
+    - geninv

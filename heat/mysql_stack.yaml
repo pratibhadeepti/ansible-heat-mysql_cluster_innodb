@@ -1,0 +1,63 @@
+heat_template_version: 2017-02-24
+
+description: Heat orchestration template for deploying a MySQL Server
+
+parameters:
+
+  node_count:
+    type: number
+    label: Node count
+    description: Number of MySQL Nodes
+    default: 3
+
+  image:
+    type: string
+    description: Image to use for the instances
+    constraints:
+      - custom_constraint: glance.image
+
+  flavor:
+    type: string
+    description: Flavor to be used for the stack
+    constraints:
+      - custom_constraint: nova.flavor
+
+  key_name:
+    type: string
+    label: key
+    description: Key for controlling access to the stack.
+    constraints:
+      - custom_constraint: nova.keypair
+
+  mysql_network:
+    type: string
+    description: Network to used for the MySQL nodes
+
+  mysql_security_group:
+    type: string
+    description: Security group for instances.
+
+  mysql_volume_size:
+    type: string
+    description: Size in GB for MySQL data volume
+    default: 10
+
+resources:
+
+# boot script
+  mysql_cluster:
+    type: OW::MySQL::Cluster
+    properties:
+      node_count: { get_param: node_count }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key_name }
+      mysql_volume_size: { get_param: mysql_volume_size }
+      network: { get_param: mysql_network }
+      security_group: { get_param: mysql_security_group }
+      name: { get_param: 'OS::stack_name' }
+
+outputs:
+  mysql_ips:
+    description: "The private IPs of the MySQL nodes"
+    value: { get_attr: [mysql_cluster, server_ips ] }

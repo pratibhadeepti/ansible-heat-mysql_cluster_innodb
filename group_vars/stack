@@ -1,0 +1,9 @@
+---
+node_count: 3
+image: RHEL7-4
+flavor: m5.large
+key_name: INE
+mysql_network: d1ce6baf-945f-4ff4-811e-a8ae07fa4f65
+security_group: SG_MYSQL
+data_volume_size: 3000
+ssh_user: "<REDACTED>"

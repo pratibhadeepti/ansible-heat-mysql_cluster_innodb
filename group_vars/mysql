@@ -1,0 +1,51 @@
+---
+repo:
+  mysql_community: https://nexus.dev.oneweb.net:8753/repository/mysql57-community/
+  mysql_tools: https://nexus.dev.oneweb.net:8753/repository/mysql-tools-community/
+  mysql_connectors: https://nexus.dev.oneweb.net:8753/repository/mysql-connectors-community/
+mysql_packages:
+  - mysql-community-server
+  - mysql-shell
+  - mysql-router
+mysql_ansible_packages: # required for Ansible to execute remote mysql_user commands
+  - MySQL-python
+  - libselinux-python
+  - policycoreutils-python
+  - rsync
+mysql_root_password: '!vault | <REDACTED>'
+mysql_icroot_password: '!vault | <REDACTED>'
+mysql_icroot_priv: '*.*:ALL,GRANT'
+cluster_port: <REDACTED>
+replication_port: <REDACTED>
+replication_user:
+  name: replicator
+  password: !vault | <REDACTED>
+  priv: '*.*:REPLICATION SLAVE,REQUIRESSL'
+  host: "%"
+replication_group_name: CONTROL123 # gets convertd to UUID compliant format
+replication_group_name_1: CONTROL234 # gets convertd to UUID compliant format
+replication_group_name_2: CONTROL345 # gets convertd to UUID compliant format
+data_dir: /data
+inst: 1  # This is overridden by extra-vars if defined there
+#
+# Instance config variables
+# 0
+mysql_data_dir: /data/mysql
+mysql_sock_file: /var/lib/mysql/mysql.sock
+mysql_pid_file: /var/run/mysqld/mysqld.pid
+mysql_log_file: /var/log/mysqld.log
+#
+# 1
+mysql_data_dir_1: /data/mysql1
+mysql_sock_file_1: /data/mysql1/mysql.sock
+mysql_pid_file_1: /var/run/mysqld/mysqld1.pid
+mysql_log_file_1: /var/log/mysqld1.log
+mysql_port_1: 3307
+# 2 
+mysql_data_dir_2: /data/mysql2
+mysql_sock_file_2: /data/mysql2/mysql.sock
+mysql_pid_file_2: /var/run/mysqld/mysqld2.pid
+mysql_log_file_2: /var/log/mysqld2.log
+mysql_port_2: 3308
+#
+mysql_sql_modes: ANSI

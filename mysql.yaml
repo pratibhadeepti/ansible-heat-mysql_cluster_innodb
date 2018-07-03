@@ -1,0 +1,7 @@
+---
+- name: "Configure MySQL"
+  hosts: mysql
+  become: true
+  become_user: root
+  roles:
+    - mysql

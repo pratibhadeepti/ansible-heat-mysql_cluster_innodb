@@ -1,0 +1,68 @@
+---
+- name: Create mysql cinder volumes
+  os_volume:
+    state: present
+    display_name: "c2-{{ env }}-mysql-volume-{{ item }}"
+    size: 3000
+  register: newcinder
+  with_items:
+    - 1
+    - 2
+    - 3
+
+- name: Create main MySQL cluster servers in OpenStack
+  os_server:
+    state: present
+    name: "c2-{{ env }}-mysql-{{ item }}"
+    key_name: ine
+    timeout: 1000
+    flavor: "m5.large"
+    image: "{{ image_id[env] }}"
+    security_groups: "{{ security_group }}"
+    nics:
+      - net-id: "{{ net_id[env] }}"
+    auto_ip: "{% if item == 1 %}yes{% else %}no{% endif %}"
+  register: newnodes
+  with_items:
+    - 1
+    - 2
+    - 3
+
+- name: Add cinder volumes to MySQL instance
+  os_server_volume:
+    state: present
+    server: "c2-{{ env }}-mysql-{{ item }}"
+    volume: "c2-{{ env }}-mysql-volume-{{ item }}"
+    device: /dev/vdb
+  with_items:
+    - 1
+    - 2
+    - 3
+
+# Prevents Ansible from jumping ahead of Openstack with deployment.
+- name: "Pause to allow nodes to come up"
+  pause:
+    minutes: 1
+
+- name: Get Facts
+  os_server_facts:
+    server: "c2-{{ env }}-mysql*"
+
+- name: display server name
+  debug:
+    msg: "hostname: {{ item.name }} | IP: {{ item.private_v4 }}" 
+  with_items: "{{ openstack_servers|json_query('[*]') }}"
+
+- name: Generate dynamic inventory
+  add_host: 
+    hostname: "{{ item.name }}"
+    groups: mysql
+    ansible_host: "{{ item.private_v4 }}"
+    ansible_user: "{{ ansible_user[env] }}"
+    ansible_ssh_private_key_file: "/home/{{ ansible_user[env] }}/.ssh/<REDACTED>"
+  with_items: "{{ openstack_servers|json_query('[*]') }}"
+
+# Verify inventory was gathered properly.
+- name: List Inventory
+  debug:
+   var: hostvars[inventory_hostname]

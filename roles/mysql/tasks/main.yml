@@ -1,0 +1,419 @@
+---
+- name: "Build dynamic /etc/hosts file"
+  blockinfile:
+    dest: /etc/hosts
+    marker: "# {mark} ANSIBLE GENERATED HOSTS"
+    block: |
+      {% for host in groups['mysql'] %}
+      {{ hostvars[host].ansible_default_ipv4.address }} {{ hostvars[host].ansible_hostname }}.os.oneweb.net {{ hostvars[host].ansible_hostname }}
+      {% endfor %}
+
+#### NOT NEEDED BUT HERE FOR REFERENCE - BUILD VOLUME USING HEAT! ####
+
+#- name: Check whether vdb partition exists
+#  shell: |
+#    prt=$(parted /dev/vdb print list | grep -i vdb | grep Disk | awk '{print $2}' | sed 's/://')
+#    if [ ! -z $prt ] && [ $prt == "/dev/vdb" ]; then
+#      prtext="yes"
+#      else
+#        prtext="no"
+#    fi
+#    echo $prtext
+#  register: prtexist
+
+#- name: If partition does not exist exit playbook
+#  meta: end_play
+#  when: prtexist.stdout == "no"
+
+#- name: Check whether vdb has been formatted
+#  shell: |
+#    fmt=$(blkid | grep -i vdb | awk '{ print $1 }')
+#    if [ ! -z $fmt ] ; then echo "yes"; else echo "no"; fi
+#  register: fmtexist
+
+#- name: "mkfs format /dev/vdb"
+#  filesystem:
+#    fstype: ext4
+#    dev: /dev/vdb
+#  when: fmtexist.stdout == "no"
+
+#- name: copy label shell script
+#  copy:
+#    src: label.sh
+#    dest: /tmp/label.sh
+#    mode: 0755
+
+#- name: Run label script
+#  script: label.sh
+#  register: lblexist
+
+#- name: "Check whether label exists for vdb"
+#  shell: |
+#    lbl=$(xfs_admin -l /dev/vdb)
+#    if [ -z $lbl ]; then
+#      echo "no"
+#      else
+#        echo "exist"
+#    fi
+#  register: lblexist
+
+#- name: "Create directory /data"
+#  file:
+#    path: /data
+#    state: directory
+#    mode: 0755
+
+#- name: "Create label for vdb"
+#  shell: |
+#    e2label /dev/vdb mysqldata
+
+#- name: Check fstab
+#  shell: |
+#    fst=$(grep -i mysqldata /etc/fstab)
+#    if [ -z $fst ]; then echo "no"; else echo "yes"; fi
+#  register: fstexist
+
+#- name: "Modify fstab"
+#  shell: |
+#    echo "LABEL=mysqldata /data ext4 defaults 0 1" >> /etc/fstab
+#    mount -a
+#  when: fstexist.stdout == "no"
+
+#- name: Check path to vdb exists
+#  shell: |
+#    chkpath=$(df -h | grep -i vdb | awk '{print $1 $6}')
+#    if [ ! -z $chkpath] && [ "$chkpath" == "/dev/vdb/data" ];
+#      echo "yes"
+#      else
+#        echo "no"
+#    fi
+#  register: chkpathexists
+
+#- name: If path does not exist exit playbook
+#  meta: end_play
+#  when: chkpathexists.stdout != "yes"
+
+- name: Remove update_hostname from cloud.cfg
+  lineinfile:
+    path: /etc/cloud/cloud.cfg
+    state: absent
+    regexp: '^ - update_hostname'
+
+- name: "Set hostname to FQDN: {{ inventory_hostname }}.os.oneweb.net"
+  hostname:
+    name: "{{ ansible_hostname }}.os.oneweb.net"
+
+#- name: Set Selinux to permissive
+#  command: setenforce 0
+   
+#- name: Set Selinux to Permissive permanently
+#  lineinfile:
+#    path: /etc/selinux/config
+#    regexp: '^SELINUX='
+#    line: 'SELINUX=permissive'
+
+- name: Check if CA cert is already present
+  stat:
+    path: /usr/share/pki/ca-trust-source/anchors/dev-ca.cer
+  register: cert_result
+
+- name: Copy Dev CA cert to appropriate folder for repos
+  copy: src=dev-ca.cer dest=/usr/share/pki/ca-trust-source/anchors
+  when: cert_result.stat.exists == False
+
+# Install Dev CA Cert for Nexus connection
+- name: Install Dev CA Cert for Nexus Repo connection
+  command: update-ca-trust extract
+  when: cert_result.stat.exists == False
+
+- name: "Enable MySQL Repository"
+  yum_repository:
+    name: mysql-community
+    description: "MySQL Community Repository"
+    baseurl: "{{ repo.mysql_community }}"
+    enabled: yes
+    gpgcheck: no
+
+- name: "Enable MySQL tools Repository"
+  yum_repository:
+    name: mysql-tools
+    description: "MySQL Tools Repository"
+    baseurl: "{{ repo.mysql_tools }}"
+    enabled: yes
+    gpgcheck: no
+
+- name: "Enable MySQL connectors Repository"
+  yum_repository:
+    name: mysql-connectors
+    description: "MySQL Tools Repository"
+    baseurl: "{{ repo.mysql_connectors }}"
+    enabled: yes
+    gpgcheck: no
+
+- name: "Install bind-utils"
+  yum:
+    name: bind-utils
+    state: present
+
+- name: "Install telnet"
+  yum:
+    name: telnet
+    state: present
+    
+- name: "Install VIM"
+  yum:
+    name: vim
+    state: present
+
+- name: "Install MySQL Packages"
+  yum:
+    name: "{{ mysql_packages }}"
+    state: present
+  register: package_installation
+
+- name: "Install MySQL Ansible Packages"
+  yum:
+    name: "{{ mysql_ansible_packages }}"
+    state: present
+
+- name: "Change mysql data directory to mysql data volume"
+  lineinfile:
+    path: /etc/my.cnf
+    regexp: '^datadir='
+    line: "datadir={{ mysql_data_dir }}"
+
+- name: "Ensure MySQL data directory exists"
+  file:
+    path: "{{ mysql_data_dir }}"
+    state: directory
+    owner: mysql
+    group: mysql
+
+- name: "Set SELinux Context for Data dir for MySQL"
+  sefcontext:
+    target: "{{ mysql_data_dir}}(/.*)?"
+    setype: mysqld_db_t
+    state: present
+
+- name: "Perform restorcon of mysql data director"
+  command: restorecon -R "{{ mysql_data_dir }}"
+
+- name: "Transfer Authentication File"
+  template:
+    src: client.my.cnf.j2
+    dest: "{{ ansible_user_dir }}/.my.cnf"
+    owner: "{{ ansible_user_id }}"
+    mode: 0600
+
+#- name: "Initialize data directory for instance 0"
+#  command: "mysqld --initialize-insecure --user mysql --datadir={{ mysql_data_dir }}"
+
+- name: "Enable the MySQL Daemon"
+  systemd:
+    name: mysqld
+    state: started
+    enabled: true
+
+- name: "Transfer baseline my.cnf configuration file"
+  template:
+    src: my.cnf.j2
+    dest: /etc/my.cnf
+    owner: root
+    mode: 0644
+  register: mysql_configuration
+
+- name: "Set MySQL root password"
+  script: "reset_password.sh '{{ mysql_root_password }}'"
+  when: package_installation|changed
+
+#- name: "Set MySQL root password for daemon mysqld"
+#  command: "mysqladmin -u root password '{{ mysql_root_password }}'"
+  
+#- name: "Remove all anonymous users"
+#  mysql_user:
+#    name: ''
+#    host_all: yes
+#    state: absent
+
+- name: "Stop MySQL"
+  systemd:
+    name: mysqld
+    state: stopped
+
+#- name: "Rsync data from /var/lib/mysql to /data/mysql"
+#  shell: |
+#    rsync -av /var/lib/mysql {{ data_dir }}
+
+#- name: "Remove file contents in /var/lib/mysql, but keep directory"
+#  shell: |
+#    cd /var/lib/mysql
+#    rm -Rf *
+
+- name: "Configure firewalld for MySQL"
+  firewalld:
+    service: mysql
+    permanent: true
+    state: enabled
+    immediate: true
+
+- name: "Configure firewalld for MySQL Replication Group"
+  firewalld:
+    port: "{{ replication_port }}/tcp"
+    permanent: true
+    state: enabled
+    immediate: true
+
+#- name: "Configure firewalld for MySQL INNODB Cluster"
+#  firewalld:
+#    port: "{{ cluster_port }}/tcp"
+#    permanent: true
+#    state: enabled
+#    immediate: true
+
+- name: "Configure SELINUX to allow group replication on replication port"
+  seport:
+    ports: "{{ replication_port }}"
+    proto: tcp
+    setype: mysqld_port_t
+    state: present
+
+#- name: "Configure SELINUX to allow INNODB cluster port"
+#  seport:
+#    ports: "{{ cluster_port }}"
+#    proto: tcp
+#    setype: mysqld_port_t
+#    state: present
+
+- name: "Comment out current file limits in mysqld.service"
+  lineinfile:
+    path: /usr/lib/systemd/system/mysqld.service
+    regexp: '^LimitNOFILE'
+    line: '#LimitNOFILE'
+
+- name: "Add new file and proc limits in mysqld.service"
+  shell: |
+    echo 'LimitNOFILE = 1024000' >> /usr/lib/systemd/system/mysqld.service
+    echo 'LimitNPROC = 1024000' >> /usr/lib/systemd/system/mysqld.service
+
+- name: "Comment out mysql limits in limits.conf"
+  lineinfile:
+    path: /etc/security/limits.conf
+    regexp: '^mysql'
+    line: '#mysql'
+
+- name: "Add new file limits in limits.conf"
+  shell: |
+    echo 'mysql hard nofile 1024000' >> /etc/security/limits.conf
+    echo 'mysql soft nofile 1024000' >> /etc/security/limits.conf
+
+- name: "Reload daemon"
+  command: "systemctl daemon-reload"
+
+- name: "Restart MySQL Daemon"
+  systemd:
+    name: mysqld
+    state: restarted
+    daemon_reload: yes
+#  when: mysql_configuration|changed
+
+- name: "Create icroot user on nodes"
+  mysql_user:
+    name: "icroot"
+    password: "{{ mysql_icroot_password }}"
+    priv: "{{ mysql_icroot_priv }}"
+    host: "{{ replication_user.host }}"
+    state: present
+    sql_log_bin: no
+
+- name: "Create replication user on nodes"
+  mysql_user:
+    name: "{{ replication_user.name }}"
+    password: "{{ replication_user.password }}"
+    priv: "{{ replication_user.priv }}"
+    host: "{{ replication_user.host }}"
+    state: present
+    sql_log_bin: no
+
+- name: "Configure replication recovery master"
+  command: mysql -NBe "CHANGE MASTER to MASTER_USER='{{ replication_user.name }}', MASTER_PASSWORD='{{ replication_user.password }}' FOR CHANNEL 'group_replication_recovery';"
+
+- name: "Check if group replication plugin has been installed"
+  shell: mysql -NBe "SHOW PLUGINS;" | grep group_replication
+  ignore_errors: yes
+  register: replication_plugin_check
+
+- name: "Install group replication plugin on nodes"
+  command: mysql -NBe "INSTALL PLUGIN group_replication SONAME 'group_replication.so';"
+  when: replication_plugin_check|failed
+
+- name: "Check if replication groups has been initialized"
+  shell: mysql -NBe "SELECT * FROM performance_schema.replication_group_members;" | awk '{print $NF}'
+  delegate_to: "{{ stack_name }}-0"
+  register: replication_init_master
+
+- name: "Initilize the replication group"
+  shell: |
+    mysql -NBe "SET GLOBAL group_replication_bootstrap_group=ON;"
+    mysql -NBe "START GROUP_REPLICATION;"
+    mysql -NBe "SET GLOBAL group_replication_bootstrap_group=OFF;"
+  delegate_to: "{{ stack_name }}-0"
+  when: replication_init_master.stdout == "OFFLINE"
+
+- name: "Check if slave is a part of a replication group"
+  shell: mysql -NBe "SELECT * FROM performance_schema.replication_group_members;" | awk '{print $NF}'
+  register: replication_init_slave
+
+- name: "Have slaves join replication group"
+  shell: |
+    mysql -NBe "START GROUP_REPLICATION;"
+  when: replication_init_slave.stdout == "OFFLINE"
+
+######################################################################
+#              Future work for multiple instances                    #
+######################################################################
+
+- name: "Block code for initializing instance 1"
+  block:
+    - file:
+        path: "{{ mysql_data_dir_1 }}"
+        state: directory
+        recurse: yes
+        owner: mysql
+        group: mysql
+
+    - name: "Initialize data directory for instance 1"
+      command: "mysqld --initialize-insecure --user mysql --datadir={{ mysql_data_dir_1 }}"
+  
+    - name: "Enable the MySQL Daemon @ 1"
+      systemd:
+        name: mysqld@1
+        state: started
+        enabled: true
+    
+    - name: "Set MySQL root password for daemon mysqld@1"
+      command: "mysqladmin -u root --socket={{ mysql_sock_file_1 }} password '{{ mysql_root_password }}'"
+
+  when: inst is defined and inst >= '2'
+
+- name: "Block code for initializing instance 2"
+  block:
+    - file:
+        path: "{{ mysql_data_dir_2 }}"
+        state: directory
+        recurse: yes
+        owner: mysql
+        group: mysql
+
+    - name: "Initialize data directory for instance 2"
+      command: "mysqld --initialize-insecure --user mysql --datadir={{ mysql_data_dir_2 }}"
+  
+    - name: "Enable the MySQL Daemon @ 2"
+      systemd:
+        name: mysqld@2
+        state: started
+        enabled: true
+    
+    - name: "Set MySQL root password for daemon mysqld@2"
+      command: "mysqladmin -u root --socket={{ mysql_sock_file_2 }} password '{{ mysql_root_password }}'"
+
+  when: inst is defined and inst == '3'

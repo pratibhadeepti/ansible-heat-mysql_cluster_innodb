@@ -1,0 +1,19 @@
+image_id:
+  ops: 4424804d-8dc4-4be1-bb8d-cabc2109e3a9
+  int: 4424804d-8dc4-4be1-bb8d-cabc2109e3a9
+  dev1: e87d00a1-1717-4615-9fc5-6d246a668faa
+  dev2: e87d00a1-1717-4615-9fc5-6d246a668faa
+
+net_id:
+  ops: d1ce6baf-945f-4ff4-811e-a8ae07fa4f65
+  int: c7ee07d4-d15e-4684-8d3c-165881d9b3c8
+  dev1: d2afb3ae-77a2-4e7c-a8a3-5574d2b48547
+  dev2: cf2e6685-b114-445b-af83-94807873b3fa
+
+ansible_user:
+  ops: <REDACTED>
+  int: <REDACTED>
+  dev1: <REDACTED>
+  dev2: <REDACTED>
+
+security_group: SG_MYSQL

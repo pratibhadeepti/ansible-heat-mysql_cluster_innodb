@@ -1,0 +1,104 @@
+heat_template_version: 2017-02-24
+
+description: Heat orchestration template for deploying a MySQL Server
+
+parameters:
+
+  name:
+    type: string
+
+  image:
+    type: string
+
+  flavor:
+    type: string
+
+  key_name:
+    type: string
+
+  network:
+    type: string
+
+  security_group:
+    type: string
+
+  server_group:
+    type: string
+
+  index:
+    type: string
+
+  mysql_volume_size:
+    type: string
+
+resources:
+
+  # System boot script for formatting and mounting cinder volume
+  boot_script:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: |
+        #!/bin/bash
+        # Install lvm2
+        yum -y install lvm2
+        
+        # Mark cinder volume as physical volume for lvm.
+        /sbin/pvcreate /dev/vdb
+
+        # Create new volume group for mysql data.
+        /sbin/vgcreate vg_mysql /dev/vdb
+
+        # Create logical volume for mysql data.
+        /sbin/lvcreate -l 100%FREE -n lv_mysql vg_mysql
+
+        # Create ext4 filesystem on the logical volume
+        /sbin/mkfs.ext4 /dev/vg_mysql/lv_mysql
+
+        # Make local export directory for mounting logical volume
+        /bin/mkdir /data
+
+        # Modify /etc/fstab file with new partition information
+        #/bin/echo "/dev/vg_mysql/lv_mysql   /data    ext4    defaults,nobootwait,noatime,data=ordered,barrier=0,nobh    0 0" >> /etc/fstab
+        #################
+        # This is the fastest mounting option as yet tested
+        /bin/echo "/dev/vg_mysql/lv_mysql   /data    ext4    rw,noatime,nodiratime,nobarrier,data=ordered    0 0" >> /etc/fstab
+        #################
+        #/bin/echo "/dev/vg_mysql/lv_mysql   /data    ext4    rw,noatime,data=writeback,barrier=0    0 0" >> /etc/fstab
+
+        # Mount the logical volume
+        /bin/mount -a
+
+  # Create a Cinder Volume
+  volume:
+    type: OS::Cinder::Volume
+    properties:
+      description: MySQL Data Volume
+      size: { get_param: mysql_volume_size }
+
+  # Deploy MySQL Server
+  server:
+    type: OS::Nova::Server
+    properties:
+      name: { get_param: name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key_name }
+      networks:
+        - network: { get_param: network }
+      security_groups:
+        - { get_param: security_group }
+      user_data_format: RAW
+      user_data: { get_resource: boot_script }
+
+  # Attache data volume to MySQL Instance
+  volume_attach:
+    type: OS::Cinder::VolumeAttachment
+    properties:
+      instance_uuid: { get_resource: server }
+      volume_id: { get_resource: volume }
+      mountpoint: /dev/vdb
+
+outputs:
+  server_ip:
+    description: "The IP address of the provisioned node."
+    value: { get_attr: [server, first_address] }

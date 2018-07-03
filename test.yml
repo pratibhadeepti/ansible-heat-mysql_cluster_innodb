@@ -1,0 +1,13 @@
+---
+- name: "Test playbook (local)"
+  hosts: localhost
+  connection: local
+  roles:
+    - test
+
+- name: "Test playbook (mysql)"
+  hosts: mysql
+  become: true
+  become_user: root
+  roles: 
+    - test2

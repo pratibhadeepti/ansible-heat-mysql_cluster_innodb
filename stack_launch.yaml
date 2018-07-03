@@ -1,0 +1,39 @@
+---
+- name: "Provision MySQL stack"
+  hosts: stack
+  connection: local
+  tasks:
+    - os_stack:
+        name: "{{ stack_name }}"
+        state: present
+        template: heat/mysql_stack.yaml
+        environment:
+          - heat/mysql_env.yaml
+        parameters:
+          node_count: "{{ node_count }}"
+          image: "{{ image }}"
+          flavor: "{{ flavor }}"
+          key_name: "{{ key_name }}"
+          mysql_network: "{{ mysql_network }}"
+          mysql_security_group: "{{ security_group }}"
+          mysql_volume_size: "{{ data_volume_size }}"
+      register: mysql_stack
+      tags:
+        - heat
+
+#### Moved into roles/createvm/tasks/main.yml ####
+#    - name: "Generate dynamic inventory base off of stack outputs"
+#      add_host:
+#        name: "{{ item }}"
+#        groups: mysql
+#      with_items: "{{ mysql_stack|json_query(mysql_private_ips) }}"
+#      vars:
+#        mysql_private_ips: "stack.outputs[?output_key=='mysql_ips'].output_value"
+#      tags:
+#        - heat
+    
+    - name: "Pause to allow nodes to come up"
+      pause:
+        minutes: 2
+      tags:
+        - heat

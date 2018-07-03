@@ -1,0 +1,18 @@
+---
+# ###########################################################################################################
+# Usage: ansible-playbook -i hosts site.yml --extra-vars "stack_name=<stack name>" --key-file="<key file path"
+#       stack_name: any thing, example: c2-ops-mysql, fde-ops-mysql, mme-ops-mysql
+# ###########################################################################################################
+- name: "Starting MySQL Cluster Install"
+  hosts: localhost
+  connection: local
+  tasks:
+  - name: "Verify whether --extra-vars \"stack_name=<stack name>\" is present"
+    fail:
+      msg: "--extra-vars \"stack_name=<stack name>\" is NOT present. Add this to your ansible-play comand"
+    when: stack_name is undefined
+
+- import_playbook: stack_launch.yaml
+- import_playbook: geninv.yaml
+- import_playbook: mysql.yaml
+
