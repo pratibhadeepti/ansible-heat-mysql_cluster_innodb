@@ -1,9 +1,9 @@
 ---
 node_count: 3
-image: RHEL7-4
-flavor: m5.large
-key_name: INE
-mysql_network: d1ce6baf-945f-4ff4-811e-a8ae07fa4f65
-security_group: SG_MYSQL
-data_volume_size: 3000
+image: CentOS 7 Generic Cloud
+flavor: m1.small
+key_name: cnva-test
+mysql_network: 283595a4-c76e-4e96-a071-5918b6b6ebfc
+security_group: default
+data_volume_size: 500
 ssh_user: "<REDACTED>"

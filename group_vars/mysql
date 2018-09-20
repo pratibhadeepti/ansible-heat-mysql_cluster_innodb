@@ -18,8 +18,8 @@ mysql_icroot_priv: '*.*:ALL,GRANT'
 cluster_port: <REDACTED>
 replication_port: <REDACTED>
 replication_user:
-  name: replicator
-  password: !vault | <REDACTED>
+  name: replicated
+  password: '!vault | <REDACTED>'
   priv: '*.*:REPLICATION SLAVE,REQUIRESSL'
   host: "%"
 replication_group_name: CONTROL123 # gets convertd to UUID compliant format
